@@ -368,7 +368,6 @@ class SVG(object):
         An SVGPlot component object on which data can be more easily plotted.
         """
         plot = SVGPlot(self, x1, y1, x2, y2, xvmin, xvmax, yvmin, yvmax)
-        self.add_style(plot.default_style(), keepdefault=True)
         self.elements.append(plot)
         return plot
 
@@ -449,16 +448,13 @@ class SVGPlot(SVG):
                 "font": "10px sans-serif",
             },            
             "rect.plotarea": {
-                "shape-rendering": "crispEdges",
                 "fill": "none",
                 "stroke": "black",
             },
             "line.axis": {
-                "shape-rendering": "crispEdges",
                 "stroke": "black"
             },
             "line.tick": {
-                "shape-rendering": "crispEdges",
                 "stroke": "black"
             },
             "text.axis": {
@@ -475,8 +471,8 @@ class SVGPlot(SVG):
                 "dominant-baseline": "central",
             },
             "line.grid": {
-                "shape-rendering": "crispEdges",
-                "stroke": "gray",
+                "stroke": "#888888",
+                "stroke-opacity": 0.5,
                 "stroke-dasharray": "1 1",
             },
             ".dataline": {
@@ -543,14 +539,14 @@ class SVGPlot(SVG):
             for xtv in xticksv:
                 xr = (xtv - xvmin) / dxv
                 xx = x1 + (x2 - x1) * xr
-                xx = v2x(xtv)
+                xx = round(v2x(xtv))
                 self.line(xx, y2, xx, y2 + 3, cls='tick xtick')
                 self.line(xx, y1, xx, y2, cls='grid xgrid')
                 self.text(xx, y2 + 3, xtick_fmt.format(xtv), cls='tick xtick')
             for ytv in yticksv:
                 yr = (ytv - yvmin) / dyv
                 yy = y1 + (y2 - y1) * yr
-                yy = v2y(ytv)
+                yy = round(v2y(ytv))
                 self.line(x1, yy, x1 - 3, yy, cls='tick ytick')
                 self.line(x1, yy, x2, yy, cls='grid ygrid')
                 self.text(x1 - 5, yy, ytick_fmt.format(ytv), cls='tick ytick')
@@ -725,20 +721,31 @@ class SVGHelper(object):
         payload = ''.join([attr_str, cls_str, style_str])
         return payload
 
+    def iter_svgs(self):
+        """
+        Iterate through the various svg component objects.
+        """
+        for name in self.parent.layers:
+            yield name, self.parent.layers[name]
+        for elem in self.parent.elements:
+            if isinstance(elem, SVG):
+                yield None, elem
+
     def style_lines(self):
         """
         Iterate through the svg css style lines defined by this object.
         """
         self.parent.finalize()
+        for name, svg in self.iter_svgs(): # recurse here
+            for line in svg._meta.style_lines():
+                yield line
         if isinstance(self.parent.style, str):
             yield self.parent.style
         else:
             for cls in self.parent.style:
                 yield "%s {" % str(cls)
-
                 for key, value in self.parent.style[cls].items():
                     yield "    %s: %s;" % (key, value)
-
                 yield "}"
 
     def defs_lines(self):
@@ -746,13 +753,9 @@ class SVGHelper(object):
         Iterate through the additional svg defs section lines defined by this object.
         """
         self.parent.finalize()
-        for name in self.parent.layers:
-            for line in self.parent.layers[name]._meta.defs_lines():
+        for name, svg in self.iter_svgs(): # recurse here
+            for line in svg._meta.defs_lines():
                 yield line
-        for elem in self.parent.elements:
-            if isinstance(elem, SVG):
-                for line in elem._meta.defs_lines():
-                    yield line
         for line in self.parent.defs:
             yield line
         for name, svg in self.parent.masks.items():
@@ -766,16 +769,16 @@ class SVGHelper(object):
         Iterate through the svg body lines defined by this object.
         """
         self.parent.finalize()
-        for name in self.parent.layers:
-            yield '<g id="%s">' % name
-            for elem in self.parent.layers[name]._meta.body_lines():
-                yield '    %s' % elem
-            yield "</g>"
-
+        for name, svg in self.iter_svgs(): # recurse here
+            if name:
+                yield '<g id="%s">' % name
+            for line in svg._meta.body_lines():
+                yield line
+            if name:
+                yield "</g>"
         for elem in self.parent.elements:
             if isinstance(elem, SVG):
-                for line in elem._meta.body_lines():
-                    yield line
+                pass
             else:
                 yield "%s" % elem
 
