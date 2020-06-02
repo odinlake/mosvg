@@ -10,7 +10,7 @@ where `.` is the root of your pythonpath.
 Examples
 ========
 
-```
+```python
 import lib.mosvg
 svg = lib.mosvg.SVG(style={
   'circle' : {
